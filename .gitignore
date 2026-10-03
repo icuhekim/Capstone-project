@@ -1,3 +1,33 @@
-__pycache__
+# Raw / local data
+data/raw/*.csv
+data/interim/*
+data/processed/*
+
+# Keep folder structure
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# Saved models
+models/*.pkl
+models/*.joblib
+models/*.keras
+models/*.h5
+
+# Keep models folder structure
+!models/.gitkeep
+
+# Environment / secrets
 .env
-.learn
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store

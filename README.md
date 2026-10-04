@@ -319,3 +319,9 @@ The model and application are not validated medical devices and must not be used
 ## Author
 
 Developed as a capstone project for the **4Geeks Academy Data Science and Machine Learning Bootcamp**.
+
+## Live Demo
+
+The deployed Streamlit application is available at:
+
+https://prolonged-icu-los-predictor.onrender.com/

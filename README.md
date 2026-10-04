@@ -1,112 +1,321 @@
-# Data Science Project Boilerplate
+# Predicting Prolonged ICU Length of Stay Using First-24-Hour Clinical Data
 
-This boilerplate is designed to kickstart data science projects by providing a basic setup for database connections, data processing, and machine learning model development. It includes a structured folder organization for your datasets and a set of pre-defined Python packages necessary for most data science tasks.
+This project develops a machine-learning model to predict whether an ICU stay will exceed 5 days using clinical information available during the first 24 hours of ICU admission.
 
-## Structure
+The project was developed as a capstone for the 4Geeks Academy Data Science and Machine Learning Bootcamp.
 
-The project is organized as follows:
+## Project Objective
 
-- **`src/app.py`** → Main Python script where your project will run.
-- **`src/explore.ipynb`** → Notebook for exploration and testing. Once exploration is complete, migrate the clean code to `app.py`.
-- **`src/utils.py`** → Auxiliary functions, such as database connection.
-- **`requirements.txt`** → List of required Python packages.
-- **`models/`** → Will contain your SQLAlchemy model classes.
-- **`data/`** → Stores datasets at different stages:
-  - **`data/raw/`** → Raw data.
-  - **`data/interim/`** → Temporarily transformed data.
-  - **`data/processed/`** → Data ready for analysis.
+The goal is to estimate the probability of prolonged ICU length of stay among patients who remain in the ICU at the 24-hour prediction landmark.
 
+The binary outcome is defined as:
 
-## ⚡ Initial Setup in Codespaces (Recommended)
+- **0:** ICU length of stay of 1–5 days
+- **1:** ICU length of stay greater than 5 days
 
-No manual setup is required, as **Codespaces is automatically configured** with the predefined files created by the academy for you. Just follow these steps:
+This is an educational machine-learning project and is not intended for clinical decision-making.
 
-1. **Wait for the environment to configure automatically**.
-   - All necessary packages and the database will install themselves.
-   - The automatically created `username` and `db_name` are in the **`.env`** file at the root of the project.
-2. **Once Codespaces is ready, you can start working immediately**.
+---
 
+## Data Source
 
-## 💻 Local Setup (Only if you can't use Codespaces)
+Data were obtained from **MIMIC-IV v3.1**.
 
-**Prerequisites**
+MIMIC-IV is a large, de-identified critical care database developed by the MIT Laboratory for Computational Physiology and distributed through PhysioNet.
 
-Make sure you have Python 3.11+ installed on your machine. You will also need pip to install the Python packages.
+Access to MIMIC-IV requires completion of the appropriate credentialing, training, and data-use requirements.
 
-**Installation**
+Because the underlying dataset is credentialed, raw MIMIC-derived CSV files are not included in this repository.
 
-Clone the project repository to your local machine.
+---
 
-Navigate to the project directory and install the required Python packages:
+## Cohort
+
+The final analytic cohort contains:
+
+- **59,809 ICU stays**
+- **47,974 unique patients**
+- **11,687 prolonged ICU stays**
+- **19.5% positive outcome prevalence**
+
+Patients with ICU stays shorter than 24 hours were excluded because the prediction is made at the 24-hour landmark.
+
+Each row represents one ICU stay.
+
+---
+
+## Predictors
+
+The final model uses 28 predictors derived from the first 24 hours of ICU admission.
+
+### Demographic and Admission Variables
+
+- Age
+- Gender
+- Admission type
+- Admission location
+- First ICU care unit
+
+### Vital Signs
+
+- Mean heart rate
+- Mean arterial pressure
+- Mean respiratory rate
+- Mean oxygen saturation
+
+### Laboratory Variables
+
+- Minimum hemoglobin
+- Minimum platelet count
+- Maximum white blood cell count
+- Minimum bicarbonate
+- Maximum BUN
+- Maximum creatinine
+- Maximum glucose
+- Minimum sodium
+- Maximum potassium
+- Maximum INR
+
+### Other Clinical Variables
+
+- Minimum Glasgow Coma Scale
+- Urine output during the first 24 hours
+- Invasive ventilation during the first 24 hours
+- Invasive ventilation at the 24-hour landmark
+- Non-invasive ventilation
+- High-flow nasal cannula
+- Tracheostomy
+- Any vasoactive medication
+- Number of different vasoactive agents
+
+---
+
+## Data Preparation
+
+Several preprocessing steps were performed before model development.
+
+### Missing Data
+
+Numerical variables were imputed using median values.
+
+Categorical variables were imputed using the most frequent category.
+
+All imputation was performed inside the machine-learning pipeline to reduce the risk of information leakage.
+
+### Numerical Variables
+
+Continuous variables were standardized using `StandardScaler`.
+
+### Categorical Variables
+
+Categorical variables were encoded using one-hot encoding with:
+
+```python
+OneHotEncoder(handle_unknown="ignore")
+```
+
+### Patient-Level Data Splitting
+
+The dataset was split using patient identifiers rather than individual ICU stays.
+
+This prevents different ICU stays from the same patient from appearing in both the training and test sets.
+
+A `GroupShuffleSplit` strategy was used for the final train/test split.
+
+Model development and hyperparameter optimization used `StratifiedGroupKFold`.
+
+This preserved patient-level grouping while approximately maintaining class balance across folds.
+
+---
+
+## Machine-Learning Models
+
+Three classification models were evaluated:
+
+1. Logistic Regression
+2. Random Forest
+3. XGBoost
+
+Cross-validation results were approximately:
+
+| Model | ROC-AUC | PR-AUC | Recall | Precision | F1 |
+|---|---:|---:|---:|---:|---:|
+| Logistic Regression | 0.802 | 0.557 | 0.341 | 0.652 | 0.448 |
+| Random Forest | 0.818 | 0.577 | 0.334 | 0.688 | 0.449 |
+| XGBoost | 0.820 | 0.583 | 0.370 | 0.669 | 0.477 |
+
+XGBoost showed the strongest overall cross-validated performance and was selected for hyperparameter optimization.
+
+---
+
+## Final Model
+
+The final model is a tuned XGBoost classifier.
+
+Performance on the held-out test cohort was approximately:
+
+- **ROC-AUC:** 0.824
+- **PR-AUC:** 0.586
+- **Accuracy:** 0.837
+- **Recall:** 0.351
+- **Precision:** 0.666
+- **F1 score:** 0.459
+- **Brier score:** 0.117
+
+The Brier score was lower than the baseline prevalence-based Brier score, indicating that the model provides more informative probability estimates than assigning the same baseline probability to every patient.
+
+The default classification threshold of 0.50 is used for classification metrics.
+
+No classification threshold was optimized using the held-out test set.
+
+---
+
+## Model Interpretation
+
+SHAP was used to evaluate how predictors contributed to model predictions.
+
+Important predictors included:
+
+- Invasive ventilation at the 24-hour landmark
+- Initial ICU care unit
+- Invasive ventilation during the first 24 hours
+- Respiratory rate
+- Glucose
+- Vasoactive-agent burden
+- Heart rate
+- Oxygen saturation
+- Glasgow Coma Scale
+- Renal-function markers
+
+SHAP values describe how the fitted model uses each variable and should not be interpreted as causal effects.
+
+---
+
+## Streamlit Application
+
+A Streamlit application was developed to provide an interactive demonstration of the final model.
+
+Users can enter clinical information from the first 24 hours of an ICU admission and receive an estimated probability that the ICU stay will exceed 5 days.
+
+The application is intended for patients who remain in the ICU at the 24-hour prediction landmark.
+
+The application is strictly educational and has not been prospectively or externally validated.
+
+To run the application locally:
+
+```bash
+streamlit run src/app.py
+```
+
+A public deployment link will be added after deployment.
+
+---
+
+## Project Structure
+
+```text
+Capstone-project/
+│
+├── data/
+│   ├── raw/
+│   ├── interim/
+│   └── processed/
+│
+├── models/
+│   └── prolonged_icu_xgb_pipeline.pkl
+│
+├── src/
+│   ├── app.py
+│   ├── explore.ipynb
+│   └── utils.py
+│
+├── .gitignore
+├── requirements.txt
+└── README.md
+```
+
+Raw MIMIC-derived datasets are excluded from version control because of data-access restrictions.
+
+Trained model files are also excluded from version control in the current repository configuration.
+
+---
+
+## Installation
+
+Clone the repository:
+
+```bash
+git clone <repository-url>
+```
+
+Navigate to the project directory:
+
+```bash
+cd Capstone-project
+```
+
+Install the required Python packages:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Create a database (if necessary)**
-
-Create a new database within the Postgres engine by customizing and executing the following command:
+Run the Streamlit application:
 
 ```bash
-$ psql -U postgres -c "DO \$\$ BEGIN 
-    CREATE USER my_user WITH PASSWORD 'my_password'; 
-    CREATE DATABASE my_database OWNER my_user; 
-END \$\$;"
-```
-Connect to the Postgres engine to use your database, manipulate tables, and data:
-
-```bash
-$ psql -U my_user -d my_database
+streamlit run src/app.py
 ```
 
-Once inside PSQL, you can create tables, run queries, insert, update, or delete data, and much more!
+The trained model file must be available locally at:
 
-**Environment Variables**
-
-Create a .env file in the root directory of the project to store your environment variables, such as your database connection string:
-
-```makefile
-DATABASE_URL="postgresql://<USER>:<PASSWORD>@<HOST>:<PORT>/<DB_NAME>"
-
-#example
-DATABASE_URL="postgresql://my_user:my_password@localhost:5432/my_database"
+```text
+models/prolonged_icu_xgb_pipeline.pkl
 ```
 
-## Running the Application
+for the application to run.
 
-To run the application, execute the app.py script from the root directory of the project:
+---
 
-```bash
-python src/app.py
-```
+## Technologies Used
 
-## Adding Models
+- Python
+- pandas
+- NumPy
+- scikit-learn
+- XGBoost
+- SHAP
+- Streamlit
+- Matplotlib
+- Google BigQuery
+- Google Cloud Platform
+- MIMIC-IV
+- Git
+- GitHub
 
-To add SQLAlchemy model classes, create new Python script files within the models/ directory. These classes should be defined according to your database schema.
+---
 
-Example model definition (`models/example_model.py`):
+## Limitations
 
-```py
-from sqlalchemy.orm import declarative_base
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column
+This project has several important limitations:
 
-Base = declarative_base()
+- The model was developed using retrospective MIMIC-IV data.
+- The model has not been externally validated.
+- ICU practice patterns and patient populations may differ across institutions.
+- Some predictors, particularly ICU care-unit categories, may reflect institution-specific workflows.
+- Predictions represent statistical associations and should not be interpreted as causal effects.
+- Model performance may differ in other patient populations or healthcare systems.
+- The application is not intended for clinical decision-making.
 
-class ExampleModel(Base):
-    __tablename__ = 'example_table'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(unique=True)
-```
+---
 
-## Working with Data
+## Disclaimer
 
-You can place your raw datasets in the data/raw directory, intermediate datasets in data/interim, and processed datasets ready for analysis in data/processed.
+This project is for educational and research demonstration purposes only.
 
-To process data, you can modify the app.py script to include your data processing steps, using pandas for data manipulation and analysis.
+The model and application are not validated medical devices and must not be used to guide patient care.
 
-## Contributors
+---
 
-This template was built as part of the [Data Science and Machine Learning Bootcamp](https://4geeksacademy.com/us/coding-bootcamps/datascience-machine-learning) by 4Geeks Academy by [Alejandro Sanchez](https://twitter.com/alesanchezr) and many other contributors. Learn more about [4Geeks Academy BootCamp programs](https://4geeksacademy.com/us/programs) here.
+## Author
 
-Other templates and resources like this can be found on the school's GitHub page.
+Developed as a capstone project for the **4Geeks Academy Data Science and Machine Learning Bootcamp**.
